@@ -1,0 +1,4 @@
+port: ":8080"
+data_file: "data.json"
+window_duration: 60s
+persist_interval: 300ms
