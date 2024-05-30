@@ -52,9 +52,7 @@ func main() {
 
 	log.Println("Shutting down server...")
 
-	// Persist data before shutting down
-	srv.PersistData()
-
+	
 	// Create a context with a timeout to give the server a chance to
     // finish up any ongoing requests
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -63,6 +61,12 @@ func main() {
 	if err := httpSrv.Shutdown(ctx); err != nil {
 		log.Fatalf("Failed to gracefully shut down server: %v", err)
 	}
+
+	// Persist data before shutting down
+	srv.PersistData()
+
+	// Close the server and clean up
+	srv.Shutdown()
 
 	log.Println("Server stopped")
 }

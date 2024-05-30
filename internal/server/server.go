@@ -8,13 +8,20 @@ import (
 	"github.com/baselrabia/go-server/internal/persistence"
 )
 
+type request struct {
+	time     time.Time
+	response chan int
+}
+
 type Server struct {
-	mu              sync.RWMutex
 	requests        []time.Time
 	windowDur       time.Duration
 	persistor       persistence.IPersistor
 	persistInterval time.Duration
 	lastPersist     time.Time
+	requestCh       chan *request
+	doneCh          chan struct{}
+	requestPool     sync.Pool
 }
 
 func NewServer(windowDur, persistInterval time.Duration, persistor persistence.IPersistor) (*Server, error) {
@@ -23,6 +30,15 @@ func NewServer(windowDur, persistInterval time.Duration, persistor persistence.I
 		persistor:       persistor,
 		persistInterval: persistInterval,
 		lastPersist:     time.Now(),
+		requestCh:       make(chan *request, 100),
+		doneCh:          make(chan struct{}),
+		requestPool: sync.Pool{
+			New: func() interface{} {
+				return &request{
+					response: make(chan int, 1), // Buffer the response channel
+				}
+			},
+		},
 	}
 
 	err := persistor.LoadData(&srv.requests)
@@ -30,32 +46,40 @@ func NewServer(windowDur, persistInterval time.Duration, persistor persistence.I
 		return nil, err
 	}
 
+	go srv.runPersistorLoop()
+
 	return srv, nil
 }
 
-func (s *Server) RecordRequest() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	now := time.Now()
-	// Append
-	s.requests = append(s.requests, now)
-	// Clean
-	s.cleanupOldRequests()
-
-	// Persist
-	if now.Sub(s.lastPersist) > s.persistInterval {
-		s.lastPersist = now
-		go func() {
-			// ensure safe access to shared variables
-			s.mu.RLock()
-			defer s.mu.RUnlock()
-			s.PersistData()
-		}()
+func (s *Server) runPersistorLoop() {
+	for {
+		select {
+		case req := <-s.requestCh:
+			now := req.time
+			// Write
+			s.requests = append(s.requests, now)
+			// Clean
+			s.cleanupOldRequests()
+			// Persist 
+			if now.Sub(s.lastPersist) > s.persistInterval {
+				s.lastPersist = now
+				s.PersistData()
+			}
+			// Count
+			req.response <- len(s.requests)
+			s.requestPool.Put(req) // Reuse request object
+		case <-s.doneCh:
+			return
+		}
 	}
+}
 
-	// Count
-	return len(s.requests)
+func (s *Server) RecordRequest() int {
+	req := s.requestPool.Get().(*request)
+	req.time = time.Now()
+
+	s.requestCh <- req
+	return <-req.response
 }
 
 func (s *Server) cleanupOldRequests() {
@@ -73,4 +97,8 @@ func (s *Server) PersistData() {
 	if err := s.persistor.PersistData(s.requests); err != nil {
 		log.Printf("Failed to persist data: %v", err)
 	}
+}
+
+func (s *Server) Shutdown() {
+	close(s.doneCh)
 }
