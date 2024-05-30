@@ -45,8 +45,14 @@
 
 		// Persist
 		if now.Sub(s.lastPersist) > s.persistInterval {
-			go s.PersistData()
-			s.lastPersist = now
+			go func() {
+				// ensure safe access to shared variables
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				
+				s.PersistData()
+				s.lastPersist = now
+			}()
 		}
 
 		// Count
