@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/baselrabia/go-server/config"
-	"github.com/baselrabia/go-server/handlers"
 	"github.com/baselrabia/go-server/internal/persistence"
 	"github.com/baselrabia/go-server/internal/server"
+	"github.com/baselrabia/go-server/routes"
 )
 
 func main() {
@@ -32,11 +32,11 @@ func main() {
 		log.Fatalf("Failed to create server: %v", err)
 	}
 
-	http.HandleFunc("/", handlers.CounterHandler(srv))
-
 	log.Printf("Starting server on port %s", cfg.Port)
+	
 	httpSrv := &http.Server{
 		Addr: cfg.Port,
+		Handler: routes.Routes(srv),
 	}
 
 	go func() {
