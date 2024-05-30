@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+
+type IPersistor interface {
+	LoadData(data *[]time.Time) error
+	PersistData(data []time.Time) error
+	Close() error
+}
+
 type Persistor struct {
 	file *os.File
 }

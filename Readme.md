@@ -36,7 +36,7 @@ curl localhost:8080
 in order to run the unit tests you can run the command:
 
  ```bash
-go run test -v
+go test ./... -v  
 ``` 
 
 ## Stress test  
