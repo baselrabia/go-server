@@ -5,87 +5,118 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-
 	"github.com/baselrabia/go-server/internal/persistence"
 )
 
 func TestNewServer(t *testing.T) {
-	mockPersistor := new(persistence.MockPersistor)
-	mockPersistor.On("LoadData", mock.Anything).Return([]time.Time{}, nil)
+	mockPersistor := &persistence.MockPersistor{
+		LoadDataFunc: func(data interface{}) error {
+			return nil
+		},
+	}
 
 	windowDur := 60 * time.Second
 	persistInterval := 300 * time.Millisecond
 
 	srv, err := NewServer(windowDur, persistInterval, mockPersistor)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
-	assert.Equal(t, windowDur, srv.windowDur)
-	assert.Equal(t, persistInterval, srv.persistInterval)
-
+	if srv.windowDur != windowDur {
+		t.Errorf("expected windowDur %v, got %v", windowDur, srv.windowDur)
+	}
+	if srv.persistInterval != persistInterval {
+		t.Errorf("expected persistInterval %v, got %v", persistInterval, srv.persistInterval)
+	}
 }
 
 func TestRecordRequest(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	mockPersistor := new(persistence.MockPersistor)
-	mockPersistor.On("LoadData", mock.Anything).Return([]time.Time{}, nil)
-	mockPersistor.On("PersistData", mock.Anything).Return(nil).Run(func(args mock.Arguments) {
-		wg.Done()
-	})
+	mockPersistor := &persistence.MockPersistor{
+		LoadDataFunc: func(data interface{}) error {
+			return nil
+		},
+		PersistDataFunc: func(data interface{}) error {
+			wg.Done()
+			return nil
+		},
+	}
 
 	windowDur := 60 * time.Second
 	persistInterval := 300 * time.Millisecond
 	srv, err := NewServer(windowDur, persistInterval, mockPersistor)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
 	time.Sleep(350 * time.Millisecond)
 
 	count := srv.RecordRequest()
-	assert.Equal(t, 1, count)
+	if count != 1 {
+		t.Errorf("expected count 1, got %v", count)
+	}
 
 	time.Sleep(350 * time.Millisecond)
 
 	count = srv.RecordRequest()
-	assert.Equal(t, 2, count)
+	if count != 2 {
+		t.Errorf("expected count 2, got %v", count)
+	}
 
 	// Wait for PersistData to be called
 	wg.Wait()
 
-	// Ensure PersistData is called once
-	mockPersistor.AssertNumberOfCalls(t, "PersistData", 2)
-	mockPersistor.AssertExpectations(t)
+	// Ensure PersistData is called twice
+	if mockPersistor.PersistDataCalled != 2 {
+		t.Errorf("expected PersistData to be called twice, but it was called %v times", mockPersistor.PersistDataCalled)
+	}
 }
+
 func TestCleanupOldRequests(t *testing.T) {
-	mockPersistor := new(persistence.MockPersistor)
-	mockPersistor.On("LoadData", mock.Anything).Return([]time.Time{}, nil)
+	mockPersistor := &persistence.MockPersistor{
+		LoadDataFunc: func(data interface{}) error {
+			return nil
+		},
+	}
 
 	windowDur := 60 * time.Second
 	persistInterval := 300 * time.Millisecond
 	srv, err := NewServer(windowDur, persistInterval, mockPersistor)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
 	oldTime := time.Now().Add(-61 * time.Second)
 	srv.requests = append(srv.requests, oldTime)
 
 	srv.cleanupOldRequests()
-	assert.Equal(t, 0, len(srv.requests))
+	if len(srv.requests) != 0 {
+		t.Errorf("expected 0 requests, got %v", len(srv.requests))
+	}
 }
 
 func TestPersistData(t *testing.T) {
-	mockPersistor := new(persistence.MockPersistor)
-	mockPersistor.On("LoadData", mock.Anything).Return([]time.Time{}, nil)
-	mockPersistor.On("PersistData", mock.Anything).Return(nil)
+	mockPersistor := &persistence.MockPersistor{
+		LoadDataFunc: func(data interface{}) error {
+			return nil
+		},
+		PersistDataFunc: func(data interface{}) error {
+			return nil
+		},
+	}
 
 	windowDur := 60 * time.Second
 	persistInterval := 300 * time.Millisecond
 	srv, err := NewServer(windowDur, persistInterval, mockPersistor)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
 	srv.PersistData()
-	mockPersistor.AssertCalled(t, "PersistData", mock.Anything)
-	mockPersistor.AssertExpectations(t)
+	if mockPersistor.PersistDataCalled != 1 {
+		t.Errorf("expected PersistData to be called once, but it was called %v times", mockPersistor.PersistDataCalled)
+	}
 }

@@ -2,28 +2,28 @@ package persistence
 
 import (
 	"time"
-
-	"github.com/stretchr/testify/mock"
 )
 
 type MockPersistor struct {
-	mock.Mock
+	LoadDataFunc    func(interface{}) error
+	PersistDataFunc func(interface{}) error
+	CloseFunc func() error
+	LoadDataCalled  int
+	PersistDataCalled int
+	CloseCalled int
 }
 
 func (m *MockPersistor) LoadData(data *[]time.Time) error {
-	args := m.Called(data)
-	if args.Get(0) != nil {
-		*data = args.Get(0).([]time.Time)
-	}
-	return args.Error(1)
+	m.LoadDataCalled++
+	return m.LoadDataFunc(data)
 }
 
 func (m *MockPersistor) PersistData(data []time.Time) error {
-	args := m.Called(data)
-	return args.Error(0)
+	m.PersistDataCalled++
+	return m.PersistDataFunc(data)
 }
 
 func (m *MockPersistor) Close() error {
-	args := m.Called()
-	return args.Error(0)
+	m.CloseCalled++
+	return m.CloseFunc()
 }

@@ -41,7 +41,7 @@ func LoadEnvFile(filename string) error {
         value := strings.TrimSpace(parts[1])
 
         // Set the environment variable
-        fmt.Printf(" set key %s to value %s\n", key, value)
+        // fmt.Printf(" set key %s to value %s\n", key, value)
         if err := os.Setenv(key, value); err != nil {
             return fmt.Errorf("could not set environment variable: %w", err)
         }
