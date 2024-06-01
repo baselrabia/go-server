@@ -5,13 +5,13 @@ persisting data to a file.
 
 ## Configuration
 
-Configuration is managed via a `config.yaml` file. Below is an example configuration file:
+Configuration is managed via a `.env` file. Below is an example:
 
-```yaml
-port: ":8080"
-data_file: "data/data.json"
-window_duration: "60s"
-persist_interval: "300ms"
+```bash
+PORT=8080
+DATA_FILE=data.json
+WINDOW_DURATION=60s
+PERSIST_INTERVAL=3000ms
 ```
 
 - <b>port:</b> The port on which the server listens.

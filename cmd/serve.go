@@ -35,7 +35,7 @@ func main() {
 	log.Printf("Starting server on port %s", cfg.Port)
 	
 	httpSrv := &http.Server{
-		Addr: cfg.Port,
+		Addr: ":" + cfg.Port,
 		Handler: routes.Routes(srv),
 	}
 
