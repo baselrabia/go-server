@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
@@ -11,6 +12,7 @@ import (
 type request struct {
 	time     time.Time
 	response chan int
+	ctx      context.Context
 }
 
 type Server struct {
@@ -22,6 +24,7 @@ type Server struct {
 	requestCh       chan *request
 	doneCh          chan struct{}
 	requestPool     sync.Pool
+	semaphore       chan struct{}
 }
 
 func NewServer(windowDur, persistInterval time.Duration, persistor persistence.IPersistor) (*Server, error) {
@@ -39,6 +42,7 @@ func NewServer(windowDur, persistInterval time.Duration, persistor persistence.I
 				}
 			},
 		},
+		semaphore: make(chan struct{}, 5), // Limit to 5 concurrent requests
 	}
 
 	err := persistor.LoadData(&srv.requests)
@@ -55,31 +59,62 @@ func (s *Server) runPersistorLoop() {
 	for {
 		select {
 		case req := <-s.requestCh:
-			now := req.time
-			// Write
-			s.requests = append(s.requests, now)
-			// Clean
-			s.cleanupOldRequests()
-			// Persist 
-			if now.Sub(s.lastPersist) > s.persistInterval {
-				s.lastPersist = now
-				s.PersistData()
-			}
-			// Count
-			req.response <- len(s.requests)
-			s.requestPool.Put(req) // Reuse request object
+			s.semaphore <- struct{}{} // Reserve a slot
+			go s.handleRequest(req)
 		case <-s.doneCh:
 			return
 		}
 	}
 }
 
-func (s *Server) RecordRequest() int {
+
+func (s *Server) handleRequest(req *request) {
+	defer func() { <-s.semaphore }() // Release the slot when done
+
+	select {
+	// Check for request ctx timeout
+	case <-req.ctx.Done():
+		// log.Printf("request canceled: %v", req.ctx.Err())
+		s.requestPool.Put(req)
+		return
+	case <-time.After(2 * time.Second):	// Simulate processing delay
+		// Continue
+	}
+
+	
+	now := req.time
+	// Write
+	s.requests = append(s.requests, now)
+	// Clean
+	s.cleanupOldRequests()
+	// Persist 
+	if now.Sub(s.lastPersist) > s.persistInterval {
+		s.lastPersist = now
+		s.PersistData()
+	}
+	// Count
+	req.response <- len(s.requests)
+	s.requestPool.Put(req) // Reuse request object
+}
+
+func (s *Server) RecordRequest(ctx context.Context) (int, error) {
 	req := s.requestPool.Get().(*request)
 	req.time = time.Now()
+	req.ctx = ctx // Pass context to the request
+ 
 
-	s.requestCh <- req
-	return <-req.response
+	select {
+	case s.requestCh <- req:
+		// Continue to wait for the response or context timeout
+		select {
+		case count := <-req.response:
+			return count, nil
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		}
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
 }
 
 func (s *Server) cleanupOldRequests() {

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -53,15 +54,23 @@ func TestRecordRequest(t *testing.T) {
 	}
 
 	time.Sleep(350 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	count := srv.RecordRequest()
+	count, err := srv.RecordRequest(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if count != 1 {
 		t.Errorf("expected count 1, got %v", count)
 	}
 
 	time.Sleep(350 * time.Millisecond)
 
-	count = srv.RecordRequest()
+	count, err = srv.RecordRequest(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if count != 2 {
 		t.Errorf("expected count 2, got %v", count)
 	}
